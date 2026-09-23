@@ -1,0 +1,42 @@
+name: Baixar XAUUSD
+on:
+  workflow_dispatch:
+    inputs:
+      de:
+        description: "Data inicial AAAA-MM-DD"
+        default: "2026-07-01"
+      ate:
+        description: "Data final AAAA-MM-DD"
+        default: "2026-09-30"
+permissions:
+  contents: write
+jobs:
+  baixar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Baixar bid e ask
+        run: |
+          set -e
+          mkdir -p dados
+          for LADO in bid ask; do
+            npx -y dukascopy-node@latest \
+              -i xauusd \
+              -from "${{ inputs.de }}" \
+              -to "${{ inputs.ate }}" \
+              -t m1 -p "$LADO" \
+              -f csv -v true -fl false \
+              -dir dados \
+              -fn "xauusd_m1_${LADO}"
+          done
+          ls -lh dados/
+      - name: Salvar
+        run: |
+          git config user.name github-actions
+          git config user.email actions@github.com
+          git add dados/
+          git commit -m "dados xauusd ${{ inputs.de }} a ${{ inputs.ate }}" || echo nada
+          git push
