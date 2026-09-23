@@ -1,0 +1,76 @@
+name: Baixar ticks XAUUSD
+
+on:
+  workflow_dispatch:
+    inputs:
+      meses:
+        description: 'Meses AAAA-MM separados por virgula (ex: 2026-01,2026-02,2026-03)'
+        required: true
+        default: '2026-04,2026-05,2026-06'
+
+permissions:
+  contents: write
+
+jobs:
+  montar:
+    runs-on: ubuntu-latest
+    outputs:
+      lista: ${{ steps.m.outputs.lista }}
+    steps:
+      - id: m
+        run: |
+          python3 - <<'EOF' >> $GITHUB_OUTPUT
+          import json,os
+          m=[x.strip() for x in os.environ['MESES'].split(',') if x.strip()]
+          print('lista='+json.dumps(m))
+          EOF
+        env:
+          MESES: ${{ inputs.meses }}
+
+  baixar:
+    needs: montar
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 4
+      fail-fast: false
+      matrix:
+        mes: ${{ fromJson(needs.montar.outputs.lista) }}
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Baixar ${{ matrix.mes }}
+        run: |
+          set -e
+          MES="${{ matrix.mes }}"
+          DE="${MES}-01"
+          ATE=$(date -u -d "${DE} +1 month" +%F)
+          echo "periodo: $DE ate $ATE"
+          mkdir -p dados
+          npx -y dukascopy-node@latest \
+            -i xauusd -from "$DE" -to "$ATE" \
+            -t tick -f csv -v true -fl false \
+            -dir dados -fn "xauusd_tick_${MES}"
+          ls -lh dados/
+          test -s dados/xauusd_tick_${MES}.csv || { echo "ARQUIVO VAZIO"; exit 1; }
+          echo "=============== CONFERENCIA DO FORMATO ==============="
+          echo "cabecalho:"; head -1 dados/xauusd_tick_${MES}.csv
+          echo "primeiras linhas:"; head -4 dados/xauusd_tick_${MES}.csv | tail -3
+          echo "colunas: $(head -1 dados/xauusd_tick_${MES}.csv | awk -F, '{print NF}')"
+          echo "linhas: $(wc -l < dados/xauusd_tick_${MES}.csv)"
+          if head -1 dados/xauusd_tick_${MES}.csv | grep -qi "ask" && head -1 dados/xauusd_tick_${MES}.csv | grep -qi "bid"; then
+            echo ">>> OK: bid e ask no mesmo arquivo"
+          else
+            echo ">>> ATENCAO: o arquivo parece ter so um lado do preco"
+          fi
+          echo "====================================================="
+          gzip -9 dados/xauusd_tick_${MES}.csv
+          ls -lh dados/
+
+      - name: Publicar como Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ticks-${{ matrix.mes }}
+          name: Ticks XAUUSD ${{ matrix.mes }}
+          files: dados/*.gz
