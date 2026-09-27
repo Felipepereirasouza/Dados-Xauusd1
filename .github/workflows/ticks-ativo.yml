@@ -1,0 +1,77 @@
+name: Baixar ticks de qualquer ativo
+
+# Igual ao ticks.yml (XAUUSD), mas com o ativo como parâmetro.
+# Publica cada mês como Release "ticks-{ativo}-AAAA-MM" com o arquivo "{ativo}_tick_AAAA-MM.csv.gz",
+# que a Bancada VPA baixa sozinha (lib/github.js). O ticks.yml do ouro continua como está.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ativo:
+        description: 'Ativo do Dukascopy em minúsculas (ex: eurusd, gbpusd, usdjpy)'
+        required: true
+        default: 'eurusd'
+      meses:
+        description: 'Meses AAAA-MM separados por virgula (ex: 2026-01,2026-02,2026-03)'
+        required: true
+        default: '2026-07,2026-08,2026-09'
+
+permissions:
+  contents: write
+
+jobs:
+  montar:
+    runs-on: ubuntu-latest
+    outputs:
+      lista: ${{ steps.m.outputs.lista }}
+    steps:
+      - id: m
+        run: |
+          python3 - <<'EOF' >> $GITHUB_OUTPUT
+          import json,os
+          m=[x.strip() for x in os.environ['MESES'].split(',') if x.strip()]
+          print('lista='+json.dumps(m))
+          EOF
+        env:
+          MESES: ${{ inputs.meses }}
+
+  baixar:
+    needs: montar
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 4
+      fail-fast: false
+      matrix:
+        mes: ${{ fromJson(needs.montar.outputs.lista) }}
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Baixar ${{ inputs.ativo }} ${{ matrix.mes }}
+        run: |
+          set -e
+          ATIVO="$(echo '${{ inputs.ativo }}' | tr 'A-Z' 'a-z' | tr -cd 'a-z0-9')"
+          MES="${{ matrix.mes }}"
+          DE="${MES}-01"
+          ATE=$(date -u -d "${DE} +1 month" +%F)
+          ARQ="${ATIVO}_tick_${MES}"
+          echo "ativo: $ATIVO · periodo: $DE ate $ATE"
+          mkdir -p dados
+          npx -y dukascopy-node@latest \
+            -i "$ATIVO" -from "$DE" -to "$ATE" \
+            -t tick -f csv -v true -fl false \
+            -dir dados -fn "$ARQ"
+          test -s "dados/${ARQ}.csv" || { echo "ARQUIVO VAZIO"; exit 1; }
+          echo "cabecalho: $(head -1 dados/${ARQ}.csv)"
+          echo "linhas: $(wc -l < dados/${ARQ}.csv)"
+          gzip -9 "dados/${ARQ}.csv"
+          ls -lh dados/
+          echo "ATIVO=$ATIVO" >> $GITHUB_ENV
+
+      - name: Publicar como Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ticks-${{ env.ATIVO }}-${{ matrix.mes }}
+          name: Ticks ${{ env.ATIVO }} ${{ matrix.mes }}
+          files: dados/*.gz
