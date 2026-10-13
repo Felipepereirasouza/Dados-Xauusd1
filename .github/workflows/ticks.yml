@@ -62,7 +62,9 @@ jobs:
             -i xauusd -from "$DE" -to "$ATE" \
             -t tick -f csv -v true -fl false \
             -r 3 -rp 1000 -re -fr -bs 5 -bp 1500 \
-            -dir dados -fn "xauusd_tick_${MES}"
+            -dir dados -fn "xauusd_tick_${MES}" > baixar.log 2>&1 || {
+              echo "::error title=dukascopy-node falhou em ${MES}::$(tail -c 900 baixar.log | tr '\n' ' ')"; cat baixar.log | tail -50; exit 1; }
+          tail -20 baixar.log
           ls -lh dados/
           test -s dados/xauusd_tick_${MES}.csv || { echo "ARQUIVO VAZIO"; exit 1; }
           echo "=============== CONFERENCIA DO FORMATO ==============="
