@@ -29,7 +29,7 @@ jobs:
               -to "${{ inputs.ate }}" \
               -t m1 -p "$LADO" \
               -f csv -v true -fl false \
-              -r 3 -rp 1000 -re -fr -bs 5 -bp 1500 \
+              -r 3 -rp 1000 \
               -dir dados \
               -fn "xauusd_m1_${LADO}"
           done

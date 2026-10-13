@@ -81,7 +81,7 @@ def baixar_dia(dia, pasta):
     else:
         args = ["npx", "-y", f"dukascopy-node@{DUKA_VERSAO}", "-i", "xauusd", "-from", de, "-to", ate,
                 "-t", "tick", "-f", "csv", "-v", "true", "-fl", "false",
-                "-r", "6", "-rp", "3000", "-re", "-fr", "-bs", "4", "-bp", "2000",
+                *os.environ.get("DUKA_OPCOES", "-r 6 -rp 3000").split(),
                 "-dir", pasta, "-fn", nome]
     print("  baixando de novo", de, flush=True)
     res = subprocess.run(args, capture_output=True, text=True)
