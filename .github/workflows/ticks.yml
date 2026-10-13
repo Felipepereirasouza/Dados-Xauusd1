@@ -66,7 +66,8 @@ jobs:
               echo "::error title=dukascopy-node falhou em ${MES}::$(tail -c 900 baixar.log | tr '\n' ' ')"; cat baixar.log | tail -50; exit 1; }
           tail -20 baixar.log
           ls -lh dados/
-          test -s dados/xauusd_tick_${MES}.csv || { echo "ARQUIVO VAZIO"; exit 1; }
+          test -s dados/xauusd_tick_${MES}.csv || {
+            echo "::error title=Arquivo de ${MES} vazio ou ausente::arquivos: $(ls -la dados | tr '\n' ' ') | log: $(tail -c 700 baixar.log | tr '\n' ' ')"; exit 1; }
           echo "=============== CONFERENCIA DO FORMATO ==============="
           echo "cabecalho:"; head -1 dados/xauusd_tick_${MES}.csv
           echo "primeiras linhas:"; head -4 dados/xauusd_tick_${MES}.csv | tail -3
