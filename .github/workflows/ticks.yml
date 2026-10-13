@@ -51,9 +51,24 @@ jobs:
           npx -y dukascopy-node@latest \
             -i xauusd -from "$DE" -to "$ATE" \
             -t tick -f csv -v true -fl false \
+            -r 10 -rp 3000 -re -bs 5 -bp 2000 \
             -dir dados -fn "xauusd_tick_${MES}"
           ls -lh dados/
           test -s dados/xauusd_tick_${MES}.csv || { echo "ARQUIVO VAZIO"; exit 1; }
+          echo "=============== HORAS FALTANDO (pregao) ==============="
+          python3 - "dados/xauusd_tick_${MES}.csv" <<'PY'
+          import sys, datetime as dt
+          hs=set()
+          with open(sys.argv[1]) as f:
+              next(f)
+              for l in f: hs.add(int(l.split(',',1)[0])//3600000)
+          a,b=min(hs),max(hs); falt=[]
+          for h in range(a,b+1):
+              t=dt.datetime.utcfromtimestamp(h*3600)
+              if h in hs or t.weekday()==5 or (t.weekday()==4 and t.hour>=21) or (t.weekday()==6 and t.hour<22) or t.hour in (21,22): continue
+              falt.append(t.strftime('%Y-%m-%d %H:00'))
+          print('faltando:',len(falt)); print('\n'.join(falt[:50]))
+          PY
           echo "=============== CONFERENCIA DO FORMATO ==============="
           echo "cabecalho:"; head -1 dados/xauusd_tick_${MES}.csv
           echo "primeiras linhas:"; head -4 dados/xauusd_tick_${MES}.csv | tail -3
