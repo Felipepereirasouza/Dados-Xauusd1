@@ -7,6 +7,10 @@ on:
         description: 'Meses AAAA-MM separados por virgula (ex: 2026-01,2026-02,2026-03)'
         required: true
         default: '2026-04,2026-05,2026-06'
+      passes:
+        description: 'Quantas vezes rebaixar os dias que ficarem com hora sem tick'
+        required: false
+        default: '3'
 
 permissions:
   contents: write
@@ -35,7 +39,11 @@ jobs:
       fail-fast: false
       matrix:
         mes: ${{ fromJson(needs.montar.outputs.lista) }}
+    env:
+      DUKA_VERSAO: '1.50.0'
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -48,9 +56,11 @@ jobs:
           ATE=$(date -u -d "${DE} +1 month" +%F)
           echo "periodo: $DE ate $ATE"
           mkdir -p dados
-          npx -y dukascopy-node@latest \
+          # -r/-rp/-re: tenta de novo quando a Dukascopy falha ou devolve vazio (o padrão é 0 tentativas, e a hora some sem aviso)
+          npx -y dukascopy-node@${DUKA_VERSAO} \
             -i xauusd -from "$DE" -to "$ATE" \
             -t tick -f csv -v true -fl false \
+            -r 3 -rp 1000 -re -bs 5 -bp 1500 \
             -dir dados -fn "xauusd_tick_${MES}"
           ls -lh dados/
           test -s dados/xauusd_tick_${MES}.csv || { echo "ARQUIVO VAZIO"; exit 1; }
@@ -65,7 +75,22 @@ jobs:
             echo ">>> ATENCAO: o arquivo parece ter so um lado do preco"
           fi
           echo "====================================================="
-          gzip -9 dados/xauusd_tick_${MES}.csv
+
+      - name: Conferir horas sem tick e rebaixar os dias com buraco
+        run: |
+          MES="${{ matrix.mes }}"
+          python3 .github/scripts/conferir_ticks.py dados/xauusd_tick_${MES}.csv "$MES" \
+            --passes "${{ inputs.passes || '3' }}" --relatorio dados/lacunas_${MES}.txt
+          {
+            echo "### Ticks XAUUSD ${MES}"
+            echo '```'
+            head -40 dados/lacunas_${MES}.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Compactar
+        run: |
+          gzip -9 dados/xauusd_tick_${{ matrix.mes }}.csv
           ls -lh dados/
 
       - name: Publicar como Release
@@ -73,4 +98,7 @@ jobs:
         with:
           tag_name: ticks-${{ matrix.mes }}
           name: Ticks XAUUSD ${{ matrix.mes }}
-          files: dados/*.gz
+          files: |
+            dados/*.gz
+            dados/lacunas_*.txt
+          overwrite_files: true

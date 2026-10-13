@@ -23,12 +23,13 @@ jobs:
           set -e
           mkdir -p dados
           for LADO in bid ask; do
-            npx -y dukascopy-node@latest \
+            npx -y dukascopy-node@1.50.0 \
               -i xauusd \
               -from "${{ inputs.de }}" \
               -to "${{ inputs.ate }}" \
               -t m1 -p "$LADO" \
               -f csv -v true -fl false \
+              -r 3 -rp 1000 -re -bs 5 -bp 1500 \
               -dir dados \
               -fn "xauusd_m1_${LADO}"
           done
