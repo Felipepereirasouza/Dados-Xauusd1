@@ -11,6 +11,10 @@ on:
         description: 'Quantas vezes rebaixar os dias que ficarem com hora sem tick'
         required: false
         default: '3'
+      teste_tempo_real:
+        description: 'Só testar o getRealTimeRates numa hora (AAAA-MM-DDTHH), sem baixar meses'
+        required: false
+        default: ''
       opcoes:
         description: 'Opções extras do dukascopy-node (novas tentativas)'
         required: false
@@ -35,8 +39,31 @@ jobs:
         env:
           MESES: ${{ inputs.meses }}
 
+  teste_tempo_real:
+    if: ${{ inputs.teste_tempo_real != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Testar getRealTimeRates
+        run: |
+          npm i --no-save dukascopy-node@1.50.0 >/dev/null 2>&1
+          H="${{ inputs.teste_tempo_real }}"
+          DE="${H}:00:00.000Z"
+          ATE=$(date -u -d "${H}:00:00 +1 hour" +%Y-%m-%dT%H:%M:%S.000Z)
+          OUT=$(node .github/scripts/tempo_real.js "$DE" "$ATE" teste.csv 2>&1 || true)
+          echo "$OUT"
+          echo "::notice title=getRealTimeRates ${H}::$(echo "$OUT" | tail -c 900 | tr '\n' ' ')"
+          OUT2=$(node .github/scripts/tempo_real.js "${H}:00:00.000Z" "$(date -u -d "${H}:00:00 +10 minutes" +%Y-%m-%dT%H:%M:%S.000Z)" teste2.csv 2>&1 || true)
+          echo "::notice title=getRealTimeRates 10 min::$(echo "$OUT2" | tail -c 900 | tr '\n' ' ')"
+          OUT3=$(node .github/scripts/tempo_real.js "2026-10-12T15:00:00.000Z" "2026-10-12T15:10:00.000Z" teste3.csv 2>&1 || true)
+          echo "::notice title=getRealTimeRates ontem::$(echo "$OUT3" | tail -c 900 | tr '\n' ' ')"
+
   baixar:
     needs: montar
+    if: ${{ inputs.teste_tempo_real == '' }}
     runs-on: ubuntu-latest
     strategy:
       max-parallel: 2
