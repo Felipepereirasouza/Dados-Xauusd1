@@ -51,7 +51,7 @@ jobs:
           npx -y dukascopy-node@latest \
             -i xauusd -from "$DE" -to "$ATE" \
             -t tick -f csv -v true -fl false \
-            -r 10 -rp 3000 -re -bs 5 -bp 2000 \
+            -r 10 -rp 3000 -re -fr -bs 5 -bp 2000 \
             -dir dados -fn "xauusd_tick_${MES}"
           ls -lh dados/
           test -s dados/xauusd_tick_${MES}.csv || { echo "ARQUIVO VAZIO"; exit 1; }
