@@ -14,7 +14,7 @@ on:
       opcoes:
         description: 'Opções extras do dukascopy-node (novas tentativas)'
         required: false
-        default: '-r 3 -rp 1000'
+        default: '-r 5 -rp 10000 -bs 3 -bp 3000'
 
 permissions:
   contents: write
@@ -39,7 +39,7 @@ jobs:
     needs: montar
     runs-on: ubuntu-latest
     strategy:
-      max-parallel: 4
+      max-parallel: 2
       fail-fast: false
       matrix:
         mes: ${{ fromJson(needs.montar.outputs.lista) }}
@@ -61,11 +61,12 @@ jobs:
           echo "periodo: $DE ate $ATE"
           mkdir -p dados
           # -r/-rp: tenta de novo quando a Dukascopy falha (o padrão é 0 tentativas, e a hora some sem aviso).
-          # Com -re -fr o arquivo do mês saiu vazio (0 bytes); o passo seguinte confere e rebaixa os dias com buraco.
+          # A Dukascopy responde 'status 202' quando limita o acesso; por isso as pausas longas e no máximo 2 meses ao mesmo tempo.
+          # O passo seguinte confere e rebaixa os dias que ainda ficarem com buraco.
           npx -y dukascopy-node@${DUKA_VERSAO} \
             -i xauusd -from "$DE" -to "$ATE" \
             -t tick -f csv -v true -fl false \
-            ${{ inputs.opcoes || '-r 3 -rp 1000' }} \
+            ${{ inputs.opcoes || '-r 5 -rp 10000 -bs 3 -bp 3000' }} \
             -dir dados -fn "xauusd_tick_${MES}" > baixar.log 2>&1 || {
               echo "::error title=dukascopy-node falhou em ${MES}::$(tail -c 900 baixar.log | tr '\n' ' ')"; cat baixar.log | tail -50; exit 1; }
           tail -20 baixar.log
