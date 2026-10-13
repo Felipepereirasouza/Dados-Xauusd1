@@ -1,0 +1,73 @@
+name: Baixar horas faltando (várias máquinas)
+
+# Roda a cada push neste ramo. Divide a lista .github/horas/horas_faltando.txt em PARTES
+# e baixa cada parte numa máquina diferente, ao mesmo tempo, com o mesmo script do PC
+# (uma hora por vez, conferindo cada arquivo e tentando de novo quando a Dukascopy falha).
+on:
+  push:
+    branches: [horas-faltando]
+    paths: ['.github/horas/**', '.github/workflows/horas_faltando.yml', '.github/scripts/baixar_ticks_dukascopy.py']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  PARTES: 20
+
+jobs:
+  baixar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        parte: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Separar a minha parte da lista
+        run: |
+          awk -v n=$PARTES -v p=${{ matrix.parte }} 'NF && (NR-1)%n==p' .github/horas/horas_faltando.txt > minha_parte.txt
+          echo "parte ${{ matrix.parte }}: $(wc -l < minha_parte.txt) horas"
+      - name: Baixar (uma hora por vez)
+        run: |
+          python3 .github/scripts/baixar_ticks_dukascopy.py --lista minha_parte.txt --pasta saida \
+            --pausa 1 --tentativas 8 --max-fora 12
+          cp saida/relatorio_lista.txt saida/relatorio_parte_${{ matrix.parte }}.txt
+          echo "### Parte ${{ matrix.parte }}" >> $GITHUB_STEP_SUMMARY
+          grep -c ' ok ' saida/relatorio_lista.txt | xargs -I{} echo "ok: {}" >> $GITHUB_STEP_SUMMARY
+          grep ' falhou ' saida/relatorio_lista.txt >> $GITHUB_STEP_SUMMARY || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: parte-${{ matrix.parte }}
+          path: saida/
+          retention-days: 7
+
+  juntar:
+    needs: baixar
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: parte-*
+          merge-multiple: true
+          path: saida
+      - name: Conferir e gravar no ramo dados-horas-faltando
+        run: |
+          cat saida/relatorio_parte_*.txt | sort > resumo.txt || true
+          ok=$(grep -c ' ok ' resumo.txt || true); vazio=$(grep -c ' vazio ' resumo.txt || true); falhou=$(grep -c ' falhou ' resumo.txt || true)
+          echo "ok=$ok vazio=$vazio falhou=$falhou"
+          { echo "## Resultado: $ok baixadas, $vazio sem arquivo (fim de semana/feriado), $falhou falharam"; grep ' falhou ' resumo.txt || true; } >> $GITHUB_STEP_SUMMARY
+          grep ' falhou ' resumo.txt | awk '{print $1" "substr($2,1,2)}' > ainda_faltando.txt || true
+          rm -f saida/relatorio_lista.txt saida/log.txt
+          git config user.name "github-actions[bot]"; git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin dados-horas-faltando && git checkout -q -B dados-horas-faltando origin/dados-horas-faltando || git checkout -q --orphan dados-horas-faltando
+          git rm -rq --cached . 2>/dev/null || true
+          mkdir -p bi5; cp -rn saida/bi5/. bi5/ 2>/dev/null || true
+          cp resumo.txt "resumo_$(date -u +%Y%m%d_%H%M).txt"; cp ainda_faltando.txt ainda_faltando.txt
+          git add bi5 resumo_*.txt ainda_faltando.txt
+          git commit -qm "Horas faltando: $ok baixadas, $falhou falharam" && git push -q origin dados-horas-faltando
