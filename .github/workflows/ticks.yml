@@ -57,10 +57,11 @@ jobs:
           echo "periodo: $DE ate $ATE"
           mkdir -p dados
           # -r/-rp/-re: tenta de novo quando a Dukascopy falha ou devolve vazio (o padrão é 0 tentativas, e a hora some sem aviso)
+          # -fr: não aborta o mês quando uma hora continua vazia (fim de semana é vazio de verdade); o passo seguinte confere e rebaixa
           npx -y dukascopy-node@${DUKA_VERSAO} \
             -i xauusd -from "$DE" -to "$ATE" \
             -t tick -f csv -v true -fl false \
-            -r 3 -rp 1000 -re -bs 5 -bp 1500 \
+            -r 3 -rp 1000 -re -fr -bs 5 -bp 1500 \
             -dir dados -fn "xauusd_tick_${MES}"
           ls -lh dados/
           test -s dados/xauusd_tick_${MES}.csv || { echo "ARQUIVO VAZIO"; exit 1; }
