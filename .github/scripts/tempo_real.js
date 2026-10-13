@@ -5,8 +5,9 @@ const fs = require('fs');
 (async () => {
   const [de, ate, saida] = process.argv.slice(2);
   try {
-    const dados = await getRealTimeRates({ instrument: 'xauusd', timeframe: 'tick', format: 'array', volumes: true,
-                                           dates: { from: de, to: ate } });
+    const cfg = { instrument: 'xauusd', timeframe: 'tick', format: 'array', volumes: true };
+    if (de === 'ultimos') cfg.last = 50; else cfg.dates = { from: de, to: ate };
+    const dados = await getRealTimeRates(cfg);
     const linhas = ['timestamp,askPrice,bidPrice,askVolume,bidVolume'];
     for (const t of dados) linhas.push(t.join(','));
     fs.writeFileSync(saida, linhas.join('\n') + '\n');

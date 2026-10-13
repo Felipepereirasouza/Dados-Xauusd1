@@ -51,15 +51,14 @@ jobs:
         run: |
           npm i --no-save dukascopy-node@1.50.0 >/dev/null 2>&1
           H="${{ inputs.teste_tempo_real }}"
-          DE="${H}:00:00.000Z"
-          ATE=$(date -u -d "${H}:00:00 +1 hour" +%Y-%m-%dT%H:%M:%S.000Z)
-          OUT=$(node .github/scripts/tempo_real.js "$DE" "$ATE" teste.csv 2>&1 || true)
-          echo "$OUT"
-          echo "::notice title=getRealTimeRates ${H}::$(echo "$OUT" | tail -c 900 | tr '\n' ' ')"
-          OUT2=$(node .github/scripts/tempo_real.js "${H}:00:00.000Z" "$(date -u -d "${H}:00:00 +10 minutes" +%Y-%m-%dT%H:%M:%S.000Z)" teste2.csv 2>&1 || true)
-          echo "::notice title=getRealTimeRates 10 min::$(echo "$OUT2" | tail -c 900 | tr '\n' ' ')"
-          OUT3=$(node .github/scripts/tempo_real.js "2026-10-12T15:00:00.000Z" "2026-10-12T15:10:00.000Z" teste3.csv 2>&1 || true)
-          echo "::notice title=getRealTimeRates ontem::$(echo "$OUT3" | tail -c 900 | tr '\n' ' ')"
+          teste () { OUT=$(node .github/scripts/tempo_real.js "$1" "$2" t.csv 2>&1 || true); echo "$OUT"; echo "::notice title=getRealTimeRates $3::$(echo "$OUT" | tail -c 700 | tr '\n' ' ')"; }
+          teste ultimos x "últimos 50 ticks"
+          DE=$(python3 -c "import datetime as d; t=d.datetime.strptime('$H','%Y-%m-%dT%H'); print(t.strftime('%Y-%m-%dT%H:%M:%S.000Z'))")
+          ATE=$(python3 -c "import datetime as d; t=d.datetime.strptime('$H','%Y-%m-%dT%H')+d.timedelta(hours=1); print(t.strftime('%Y-%m-%dT%H:%M:%S.000Z'))")
+          teste "$DE" "$ATE" "hora $H"
+          ONTEM=$(python3 -c "import datetime as d; t=(d.datetime.utcnow()-d.timedelta(days=1)).replace(hour=15,minute=0,second=0,microsecond=0); print(t.strftime('%Y-%m-%dT%H:%M:%S.000Z'), (t+d.timedelta(minutes=10)).strftime('%Y-%m-%dT%H:%M:%S.000Z'))")
+          teste ${ONTEM} "ontem 15h UTC"
+          teste "2026-10-13T14:00:00.000Z" "2026-10-13T14:10:00.000Z" "hoje 14h UTC"
 
   baixar:
     needs: montar
