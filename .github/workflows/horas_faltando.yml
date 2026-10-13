@@ -68,6 +68,6 @@ jobs:
           git fetch origin dados-horas-faltando && git checkout -q -B dados-horas-faltando origin/dados-horas-faltando || git checkout -q --orphan dados-horas-faltando
           git rm -rq --cached . 2>/dev/null || true
           mkdir -p bi5; cp -rn saida/bi5/. bi5/ 2>/dev/null || true
-          cp resumo.txt "resumo_$(date -u +%Y%m%d_%H%M).txt"; cp ainda_faltando.txt ainda_faltando.txt
+          cp resumo.txt "resumo_$(date -u +%Y%m%d_%H%M).txt"
           git add bi5 resumo_*.txt ainda_faltando.txt
           git commit -qm "Horas faltando: $ok baixadas, $falhou falharam" && git push -q origin dados-horas-faltando
