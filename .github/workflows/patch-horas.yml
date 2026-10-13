@@ -1,0 +1,31 @@
+name: Completar horas faltando XAUUSD
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [fix/ticks-retries]
+    paths: ['scripts/horas_faltando.txt', 'scripts/baixar_horas.py', '.github/workflows/patch-horas.yml']
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Baixar horas faltando
+        run: |
+          mkdir -p dados
+          python3 scripts/baixar_horas.py scripts/horas_faltando.txt || true
+          tail -5 dados/relatorio_patch.txt || true
+          gzip -9 -f dados/patch_ticks.csv
+          ls -lh dados/
+      - name: Publicar como Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ticks-patch-horas-faltando
+          name: Ticks XAUUSD - horas que faltavam
+          files: |
+            dados/patch_ticks.csv.gz
+            dados/relatorio_patch.txt
